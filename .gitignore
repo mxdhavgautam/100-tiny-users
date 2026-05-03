@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+dist
+.env*
+artifacts/runs
+artifacts/latest-report.json
+artifacts/demo-session.json
+data/submissions.json
+*.tsbuildinfo
