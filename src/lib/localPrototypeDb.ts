@@ -58,8 +58,20 @@ function createRecordId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function openDb(): Promise<PrototypeDb> {
-  const { Database } = await import("bun:sqlite");
+async function loadSqliteDatabase(): Promise<(typeof import("bun:sqlite"))["Database"] | null> {
+  try {
+    const module = await import("bun:sqlite");
+    return module.Database;
+  } catch {
+    return null;
+  }
+}
+
+async function openDb(): Promise<PrototypeDb | null> {
+  const Database = await loadSqliteDatabase();
+  if (!Database) {
+    return null;
+  }
   mkdirSync(ARTIFACTS_DIR, { recursive: true });
   const db = new Database(PROTOTYPE_DB_PATH);
   db.run(`
@@ -76,6 +88,9 @@ async function openDb(): Promise<PrototypeDb> {
 export async function appendLocalPrototypeRecord(record: LocalPrototypeRecord): Promise<void> {
   const parsed = localPrototypeRecordSchema.parse(record);
   const db = await openDb();
+  if (!db) {
+    throw new Error("SQLite persistence requires the Bun runtime.");
+  }
   try {
     db.query("insert or replace into prototype_records (id, table_name, created_at, payload) values ($id, $tableName, $createdAt, $payload)").run({
       $id: parsed.id,
@@ -90,6 +105,9 @@ export async function appendLocalPrototypeRecord(record: LocalPrototypeRecord): 
 
 export async function readLocalPrototypeRecords(): Promise<LocalPrototypeRecord[]> {
   const db = await openDb();
+  if (!db) {
+    return [];
+  }
   try {
     const rows = db.query("select table_name, payload from prototype_records order by created_at asc").all();
     return rows.map((row) => {
