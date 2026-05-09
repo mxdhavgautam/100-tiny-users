@@ -1,9 +1,110 @@
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { DEMO_SESSION_PATH, LATEST_REPORT_PATH } from "../src/lib/paths";
-import type { DemoSession, EvalReport, EvalSummary, RunProgress } from "../src/lib/types";
-import { resetDemo } from "./reset-demo";
-import { patch } from "./patcher";
+import type { DemoSession, DemoSuiteRun, RunProgress } from "../src/lib/types";
+import type { EvalReport } from "../src/lib/types";
+
+type SuiteCase = {
+  title: string;
+  workflowId: string;
+  harnessKind: DemoSuiteRun["harnessKind"];
+  argv: string[];
+};
+
+const SUITE_CASES: SuiteCase[] = [
+  {
+    title: "Portal happy-path replay",
+    workflowId: "submit-project",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/demo-hackathon.json",
+      "--workflow", "submit-project",
+      "--harness", "deterministic-playwright",
+      "--persona", "U009",
+      "--count", "50",
+      "--label", "suite-portal-happy"
+    ]
+  },
+  {
+    title: "Workbench semantic search",
+    workflowId: "search-billing-by-duplicate-charge",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/workbench-ops.json",
+      "--workflow", "search-billing-by-duplicate-charge",
+      "--harness", "deterministic-playwright",
+      "--persona", "U009",
+      "--count", "9",
+      "--label", "suite-workbench-search"
+    ]
+  },
+  {
+    title: "Portal screen-reader replay",
+    workflowId: "submit-project",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/demo-hackathon.json",
+      "--workflow", "submit-project",
+      "--harness", "deterministic-playwright",
+      "--persona", "U002",
+      "--count", "50",
+      "--label", "suite-portal-screenreader"
+    ]
+  },
+  {
+    title: "Portal long-text replay",
+    workflowId: "submit-project",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/demo-hackathon.json",
+      "--workflow", "submit-project",
+      "--harness", "deterministic-playwright",
+      "--persona", "U007",
+      "--count", "50",
+      "--label", "suite-portal-longtext"
+    ]
+  },
+  {
+    title: "Portal duplicate seed",
+    workflowId: "submit-project",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/demo-hackathon.json",
+      "--workflow", "submit-project",
+      "--harness", "deterministic-playwright",
+      "--persona", "U006",
+      "--count", "50",
+      "--label", "suite-portal-duplicate-seed"
+    ]
+  },
+  {
+    title: "Portal duplicate rejection replay",
+    workflowId: "submit-project",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/demo-hackathon.json",
+      "--workflow", "submit-project",
+      "--harness", "deterministic-playwright",
+      "--persona", "U016",
+      "--count", "50",
+      "--label", "suite-portal-duplicate-replay",
+      "--no-reset"
+    ]
+  },
+  {
+    title: "Portal keyboard replay",
+    workflowId: "submit-project",
+    harnessKind: "deterministic-playwright",
+    argv: [
+      "--config", "configs/demo-hackathon.json",
+      "--workflow", "submit-project",
+      "--harness", "deterministic-playwright",
+      "--persona", "U008",
+      "--count", "50",
+      "--label", "suite-portal-keyboard"
+    ]
+  }
+];
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,11 +129,33 @@ function shouldKeepAlive(argv: string[]): boolean {
   return argv.includes("--keep-alive");
 }
 
-function startDevServer(): { stop: () => Promise<void> } {
+async function canReuseServer(): Promise<boolean> {
+  try {
+    const [portal, workbench] = await Promise.all([
+      fetch("http://127.0.0.1:3000/portal"),
+      fetch("http://127.0.0.1:3000/workbench")
+    ]);
+    return portal.ok && workbench.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function startDevServer(): Promise<{ stop: () => Promise<void> }> {
+  if (await canReuseServer()) {
+    console.log("=== Reusing existing dev server on :3000 ===");
+    return {
+      stop: async () => {
+        await Promise.resolve();
+      }
+    };
+  }
+
   const child = spawn("bun", ["run", "dev"], {
     stdio: "inherit",
     env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" }
   });
+
   return {
     stop: async () => {
       child.kill("SIGTERM");
@@ -41,8 +164,48 @@ function startDevServer(): { stop: () => Promise<void> } {
   };
 }
 
-async function writeFinalSession(session: DemoSession): Promise<void> {
+function currentSummaryFields(runs: DemoSuiteRun[]): Pick<DemoSession, "baselineRunId" | "patchedRunId" | "baseline" | "patched"> {
+  const first = runs[0]?.summary;
+  const latest = runs.length > 0 ? runs[runs.length - 1]?.summary : undefined;
+
+  return {
+    baselineRunId: first?.runId,
+    patchedRunId: latest?.runId,
+    baseline: first,
+    patched: latest
+  };
+}
+
+async function writeSession(session: DemoSession): Promise<void> {
   await fs.writeFile(DEMO_SESSION_PATH, `${JSON.stringify(session, null, 2)}\n`, "utf8");
+}
+
+async function writeSuiteSession(runs: DemoSuiteRun[], activeLabel?: string, activeRun?: RunProgress): Promise<void> {
+  await writeSession({
+    mode: "full-suite",
+    ...currentSummaryFields(runs),
+    suiteRuns: runs,
+    activeLabel,
+    activeRun,
+    patchLog: [],
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function pendingSuiteProgress(title: string, runId: string): RunProgress {
+  return {
+    phase: "suite",
+    runId,
+    label: title,
+    total: 1,
+    completed: 0,
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    errored: 0,
+    scorePercent: 0,
+    updatedAt: new Date().toISOString()
+  };
 }
 
 async function readLatestReport(): Promise<EvalReport> {
@@ -50,37 +213,14 @@ async function readLatestReport(): Promise<EvalReport> {
   return JSON.parse(raw) as EvalReport;
 }
 
-async function writePhaseStart(phase: RunProgress["phase"], label: string, total: number, previous: Omit<DemoSession, "updatedAt" | "activeRun">): Promise<void> {
-  const now = new Date().toISOString();
-  const activeRun: RunProgress = {
-    phase,
-    runId: `${label}-pending`,
-    label,
-    total,
-    completed: 0,
-    passed: 0,
-    failed: 0,
-    blocked: 0,
-    errored: 0,
-    scorePercent: 0,
-    updatedAt: now
-  };
-  await writeFinalSession({
-    ...previous,
-    activeRun,
-    updatedAt: now
-  });
-}
+async function runSuiteCase(suiteCase: SuiteCase, completedRuns: DemoSuiteRun[]): Promise<DemoSuiteRun> {
+  console.log(`=== ${suiteCase.title} ===`);
+  await writeSuiteSession(completedRuns, suiteCase.title, pendingSuiteProgress(suiteCase.title, `${suiteCase.workflowId}-pending`));
 
-async function runEvalPhase(label: "baseline" | "patched", previous: Omit<DemoSession, "updatedAt" | "activeRun">): Promise<EvalSummary> {
-  await writePhaseStart(label, label, 50, previous);
-  const cohortArg = label === "patched" && previous.baselineRunId
-    ? ["--cohort", `artifacts/runs/${previous.baselineRunId}/config/cohort.json`]
-    : [];
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       "bun",
-      ["run", "eval", "--", "--config", "configs/demo-hackathon.json", "--label", label, "--count", "50", ...cohortArg],
+      ["run", "eval", "--", ...suiteCase.argv],
       { stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } }
     );
     child.on("error", reject);
@@ -88,12 +228,28 @@ async function runEvalPhase(label: "baseline" | "patched", previous: Omit<DemoSe
       if (exitCode === 0) {
         resolve();
       } else {
-        reject(new Error(`Eval phase ${label} exited with code ${exitCode ?? "null"} signal ${signal ?? "none"}`));
+        reject(new Error(`${suiteCase.title} exited with code ${exitCode ?? "null"} signal ${signal ?? "none"}`));
       }
     });
   });
   const report = await readLatestReport();
-  return report.summary;
+
+  return {
+    label: suiteCase.title,
+    workflowId: suiteCase.workflowId,
+    harnessKind: suiteCase.harnessKind,
+    summary: report.summary
+  };
+}
+
+function printSuiteScoreboard(runs: DemoSuiteRun[]): void {
+  console.log("=== Full demo suite scoreboard ===");
+  for (const run of runs) {
+    console.log(`${run.label}: ${run.summary.passed}/${run.summary.total} passed`);
+  }
+  console.log("Dashboard: http://127.0.0.1:3000/");
+  console.log("Portal:    http://127.0.0.1:3000/portal");
+  console.log("Workbench: http://127.0.0.1:3000/workbench");
 }
 
 async function waitUntilInterrupted(stop: () => Promise<void>): Promise<void> {
@@ -104,49 +260,31 @@ async function waitUntilInterrupted(stop: () => Promise<void>): Promise<void> {
       process.off("SIGTERM", shutdown);
       resolve();
     };
+
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
   });
   await stop();
 }
 
-console.log("=== Resetting demo ===");
-await resetDemo();
-const server = startDevServer();
+const server = await startDevServer();
 let completed = false;
 
 try {
   await waitForServer("http://127.0.0.1:3000/portal");
-  await writeFinalSession({ patchLog: [], updatedAt: new Date().toISOString() });
-  console.log("=== Baseline colony run ===");
-  const baseline = await runEvalPhase("baseline", { patchLog: [] });
-  console.log("=== Applying demo patch loop ===");
-  const patchLog = await patch(["--mode", "demo", "--all"]);
-  await writeFinalSession({
-    baselineRunId: baseline.runId,
-    baseline,
-    patchLog,
-    updatedAt: new Date().toISOString()
-  });
-  console.log("=== Patched colony rerun ===");
-  const patched = await runEvalPhase("patched", {
-    baselineRunId: baseline.runId,
-    baseline,
-    patchLog
-  });
-  await writeFinalSession({
-    baselineRunId: baseline.runId,
-    patchedRunId: patched.runId,
-    baseline,
-    patched,
-    patchLog,
-    updatedAt: new Date().toISOString()
-  });
-  console.log("=== Demo scoreboard ===");
-  console.log(`Before: ${baseline.passed}/${baseline.total} passed`);
-  console.log(`After:  ${patched.passed}/${patched.total} passed`);
-  console.log("Dashboard: http://127.0.0.1:3000/");
+  await waitForServer("http://127.0.0.1:3000/workbench");
+  const runs: DemoSuiteRun[] = [];
+  await writeSuiteSession(runs);
+
+  for (const suiteCase of SUITE_CASES) {
+    const run = await runSuiteCase(suiteCase, runs);
+    runs.push(run);
+    await writeSuiteSession(runs);
+  }
+
+  printSuiteScoreboard(runs);
   completed = true;
+
   if (shouldKeepAlive(process.argv.slice(2))) {
     await waitUntilInterrupted(server.stop);
   }

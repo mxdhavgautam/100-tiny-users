@@ -174,7 +174,7 @@ export type PatchLogEntry = {
 };
 
 export type RunProgress = {
-  phase: "baseline" | "patched";
+  phase: "baseline" | "patched" | "suite";
   runId: string;
   label: string;
   total: number;
@@ -187,11 +187,21 @@ export type RunProgress = {
   updatedAt: string;
 };
 
+export type DemoSuiteRun = {
+  label: string;
+  workflowId: string;
+  harnessKind: "deterministic-playwright" | "semantic-mini-user" | "external-webhook";
+  summary: EvalSummary;
+};
+
 export type DemoSession = {
+  mode?: "legacy-before-after" | "full-suite";
   baselineRunId?: string;
   patchedRunId?: string;
   baseline?: EvalSummary;
   patched?: EvalSummary;
+  suiteRuns?: DemoSuiteRun[];
+  activeLabel?: string;
   activeRun?: RunProgress;
   patchLog: PatchLogEntry[];
   updatedAt: string;

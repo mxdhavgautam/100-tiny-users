@@ -364,13 +364,34 @@ export function DashboardClient({
     };
   }, []);
 
-  const baseline = session?.baseline;
-  const patched = session?.patched;
+  const suiteRuns = session?.suiteRuns ?? [];
+  const isFullSuite = session?.mode === "full-suite" || suiteRuns.length > 0;
+  const firstSuiteRun = suiteRuns[0]?.summary;
+  const latestSuiteRun = suiteRuns.length > 0 ? suiteRuns[suiteRuns.length - 1]?.summary : undefined;
+  const baseline = isFullSuite ? firstSuiteRun ?? session?.baseline : session?.baseline;
+  const patched = isFullSuite ? latestSuiteRun ?? session?.patched : session?.patched;
   const active = session?.activeRun;
   const beforePercent = percent(baseline?.passed, baseline?.total);
   const afterPercent = percent(patched?.passed, patched?.total);
-  const delta = baseline && patched ? patched.passed - baseline.passed : 0;
-  const activeText = active ? `${active.phase} ${active.completed}/${active.total}` : patched ? "complete" : "idle";
+  const delta = isFullSuite ? suiteRuns.length : baseline && patched ? patched.passed - baseline.passed : 0;
+  const activeText = isFullSuite
+    ? active
+      ? `${session?.activeLabel ?? active.label} ${active.completed}/${active.total}`
+      : suiteRuns.length > 0
+        ? `${suiteRuns.length} suite run${suiteRuns.length === 1 ? "" : "s"} complete`
+        : "idle"
+    : active
+      ? `${active.phase} ${active.completed}/${active.total}`
+      : patched
+        ? "complete"
+        : "idle";
+  const beforeLabel = isFullSuite ? "First run" : "Baseline";
+  const afterLabel = isFullSuite ? "Latest run" : "Patched";
+  const deltaLabel = isFullSuite ? "Suite runs" : "Delta";
+  const deltaMetric = isFullSuite ? String(suiteRuns.length) : delta >= 0 ? `+${delta}` : String(delta);
+  const deltaDetail = isFullSuite
+    ? "Portal and workbench workflows across all supported harnesses."
+    : "Same cohort, same target, same assertions.";
   const promptPreview = prompt.trim() ? prompt : "No Codex repair prompt has been generated yet.";
   const visibleClusters = useMemo(() => (report ? clusterRowsFromReport(report) : clusterRows), [clusterRows, report]);
   const visibleArtifactItems = useMemo(() => mergeArtifactItems(artifactItems, report, prompt), [artifactItems, prompt, report]);
@@ -423,23 +444,23 @@ export function DashboardClient({
           </div>
           <div className="scoreboard" style={{ margin: 0 }}>
             <div className="scoreCard before">
-              <div className="metricLabel">Baseline</div>
+              <div className="metricLabel">{beforeLabel}</div>
               <div className="metric">{baseline ? `${baseline.passed}/${baseline.total}` : "No run"}</div>
               <div className="meter" aria-label={`Baseline score ${beforePercent}%`}>
                 <span style={{ width: `${beforePercent}%` }} />
               </div>
             </div>
             <div className="scoreCard after">
-              <div className="metricLabel">Patched</div>
+              <div className="metricLabel">{afterLabel}</div>
               <div className="metric">{patched ? `${patched.passed}/${patched.total}` : "No rerun"}</div>
               <div className="meter" aria-label={`Patched score ${afterPercent}%`}>
                 <span style={{ width: `${afterPercent}%` }} />
               </div>
             </div>
             <div className="scoreCard delta">
-              <div className="metricLabel">Delta</div>
-              <div className="metric">{delta >= 0 ? `+${delta}` : delta}</div>
-              <div className="muted">Same cohort, same target, same assertions.</div>
+              <div className="metricLabel">{deltaLabel}</div>
+              <div className="metric">{deltaMetric}</div>
+              <div className="muted">{deltaDetail}</div>
             </div>
           </div>
         </div>

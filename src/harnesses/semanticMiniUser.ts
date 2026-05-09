@@ -354,6 +354,21 @@ async function overflowState(page: Page): Promise<OverflowResult> {
   });
 }
 
+async function submissionStatusText(page: Page, timeoutMs: number): Promise<string> {
+  const locator = page.getByTestId("submission-status");
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const text = (await locator.textContent().catch(() => ""))?.trim() ?? "";
+    if (text) {
+      return text;
+    }
+    await page.waitForTimeout(50);
+  }
+
+  return ((await locator.textContent().catch(() => "")) ?? "").trim();
+}
+
 async function capturePersonaArtifacts(
   context: BrowserContext,
   page: Page,
@@ -478,7 +493,9 @@ export const semanticMiniUserAdapter: UserExecutionAdapter = {
 
     try {
       await executeMiniWorkflow(page, request, observations, state);
-      const statusText = await page.getByTestId("submission-status").textContent().catch(() => "");
+      const statusText = request.workflow.id === "submit-project"
+        ? await submissionStatusText(page, request.persona.patienceMs)
+        : (await page.getByTestId("submission-status").textContent().catch(() => "")) ?? "";
       if (statusText) {
         observe(observations, "oracle", `Observed status: ${statusText}`, state.stepId);
       }
