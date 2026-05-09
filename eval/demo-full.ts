@@ -1,10 +1,8 @@
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
-import { DEMO_SESSION_PATH } from "../src/lib/paths";
-import type { DemoSession, EvalSummary, RunProgress } from "../src/lib/types";
+import { DEMO_SESSION_PATH, LATEST_REPORT_PATH } from "../src/lib/paths";
+import type { DemoSession, EvalReport, EvalSummary, RunProgress } from "../src/lib/types";
 import { resetDemo } from "./reset-demo";
-import { clusterFailures } from "./cluster";
-import { type ColonyProgress, runColony } from "./runner";
 import { patch } from "./patcher";
 
 function wait(ms: number): Promise<void> {
@@ -47,48 +45,55 @@ async function writeFinalSession(session: DemoSession): Promise<void> {
   await fs.writeFile(DEMO_SESSION_PATH, `${JSON.stringify(session, null, 2)}\n`, "utf8");
 }
 
-function progressSummary(progress: ColonyProgress): EvalSummary {
-  return {
-    runId: progress.runId,
-    label: progress.label,
-    url: progress.url,
-    startedAt: new Date().toISOString(),
-    finishedAt: new Date().toISOString(),
-    total: progress.total,
-    passed: progress.passed,
-    failed: progress.failed,
-    scorePercent: Math.round((progress.passed / progress.total) * 100),
-    clusters: clusterFailures(progress.results)
-  };
+async function readLatestReport(): Promise<EvalReport> {
+  const raw = await fs.readFile(LATEST_REPORT_PATH, "utf8");
+  return JSON.parse(raw) as EvalReport;
 }
 
-async function writeProgress(
-  phase: RunProgress["phase"],
-  progress: ColonyProgress,
-  previous: Omit<DemoSession, "updatedAt" | "activeRun">
-): Promise<void> {
+async function writePhaseStart(phase: RunProgress["phase"], label: string, total: number, previous: Omit<DemoSession, "updatedAt" | "activeRun">): Promise<void> {
   const now = new Date().toISOString();
-  const partial = progressSummary(progress);
   const activeRun: RunProgress = {
     phase,
-    runId: progress.runId,
-    label: progress.label,
-    total: progress.total,
-    completed: progress.completed,
-    passed: progress.passed,
-    failed: progress.failed,
-    scorePercent: partial.scorePercent,
+    runId: `${label}-pending`,
+    label,
+    total,
+    completed: 0,
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    errored: 0,
+    scorePercent: 0,
     updatedAt: now
   };
   await writeFinalSession({
     ...previous,
-    baselineRunId: phase === "baseline" ? progress.runId : previous.baselineRunId,
-    patchedRunId: phase === "patched" ? progress.runId : previous.patchedRunId,
-    baseline: phase === "baseline" ? partial : previous.baseline,
-    patched: phase === "patched" ? partial : previous.patched,
     activeRun,
     updatedAt: now
   });
+}
+
+async function runEvalPhase(label: "baseline" | "patched", previous: Omit<DemoSession, "updatedAt" | "activeRun">): Promise<EvalSummary> {
+  await writePhaseStart(label, label, 50, previous);
+  const cohortArg = label === "patched" && previous.baselineRunId
+    ? ["--cohort", `artifacts/runs/${previous.baselineRunId}/config/cohort.json`]
+    : [];
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      "bun",
+      ["run", "eval", "--", "--config", "configs/demo-hackathon.json", "--label", label, "--count", "50", ...cohortArg],
+      { stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } }
+    );
+    child.on("error", reject);
+    child.on("close", (exitCode, signal) => {
+      if (exitCode === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Eval phase ${label} exited with code ${exitCode ?? "null"} signal ${signal ?? "none"}`));
+      }
+    });
+  });
+  const report = await readLatestReport();
+  return report.summary;
 }
 
 async function waitUntilInterrupted(stop: () => Promise<void>): Promise<void> {
@@ -114,43 +119,32 @@ try {
   await waitForServer("http://127.0.0.1:3000/portal");
   await writeFinalSession({ patchLog: [], updatedAt: new Date().toISOString() });
   console.log("=== Baseline colony run ===");
-  const baseline = await runColony(
-    ["--url", "http://127.0.0.1:3000/portal", "--label", "baseline", "--count", "50"],
-    {
-      onProgress: (progress) => writeProgress("baseline", progress, { patchLog: [] })
-    }
-  );
+  const baseline = await runEvalPhase("baseline", { patchLog: [] });
   console.log("=== Applying demo patch loop ===");
   const patchLog = await patch(["--mode", "demo", "--all"]);
   await writeFinalSession({
-    baselineRunId: baseline.summary.runId,
-    baseline: baseline.summary,
+    baselineRunId: baseline.runId,
+    baseline,
     patchLog,
     updatedAt: new Date().toISOString()
   });
   console.log("=== Patched colony rerun ===");
-  const patched = await runColony(
-    ["--url", "http://127.0.0.1:3000/portal", "--label", "patched", "--count", "50"],
-    {
-      onProgress: (progress) =>
-        writeProgress("patched", progress, {
-          baselineRunId: baseline.summary.runId,
-          baseline: baseline.summary,
-          patchLog
-        })
-    }
-  );
+  const patched = await runEvalPhase("patched", {
+    baselineRunId: baseline.runId,
+    baseline,
+    patchLog
+  });
   await writeFinalSession({
-    baselineRunId: baseline.summary.runId,
-    patchedRunId: patched.summary.runId,
-    baseline: baseline.summary,
-    patched: patched.summary,
+    baselineRunId: baseline.runId,
+    patchedRunId: patched.runId,
+    baseline,
+    patched,
     patchLog,
     updatedAt: new Date().toISOString()
   });
   console.log("=== Demo scoreboard ===");
-  console.log(`Before: ${baseline.summary.passed}/${baseline.summary.total} passed`);
-  console.log(`After:  ${patched.summary.passed}/${patched.summary.total} passed`);
+  console.log(`Before: ${baseline.passed}/${baseline.total} passed`);
+  console.log(`After:  ${patched.passed}/${patched.total} passed`);
   console.log("Dashboard: http://127.0.0.1:3000/");
   completed = true;
   if (shouldKeepAlive(process.argv.slice(2))) {

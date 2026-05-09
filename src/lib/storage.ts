@@ -1,6 +1,5 @@
 import { promises as fs } from "node:fs";
 import { z } from "zod";
-import { BUG_DUPLICATE_TEAM_OVERWRITE } from "@/src/demo/bugSwitches";
 import { DATA_DIR, SUBMISSIONS_PATH } from "@/src/lib/paths";
 import { normalizeTeamName } from "@/src/lib/normalize";
 import type { Submission, SubmissionInput, SubmissionResponse } from "@/src/lib/types";
@@ -55,9 +54,9 @@ export async function createSubmission(input: unknown): Promise<SubmissionRespon
 
   const normalizedTeamName = normalizeTeamName(parsed.data.teamName);
   const existing = await readSubmissions();
-  const duplicateIndex = existing.findIndex((item) => item.normalizedTeamName === normalizedTeamName);
+  const duplicateExists = existing.some((item) => item.normalizedTeamName === normalizedTeamName);
 
-  if (duplicateIndex >= 0 && !BUG_DUPLICATE_TEAM_OVERWRITE) {
+  if (duplicateExists) {
     return { ok: false, message: "That team already has a submission. Ask a teammate to edit it instead." };
   }
 
@@ -68,12 +67,7 @@ export async function createSubmission(input: unknown): Promise<SubmissionRespon
     normalizedTeamName
   };
 
-  const next = [...existing];
-  if (duplicateIndex >= 0 && BUG_DUPLICATE_TEAM_OVERWRITE) {
-    next[duplicateIndex] = submission;
-  } else {
-    next.unshift(submission);
-  }
+  const next = [submission, ...existing];
 
   await writeSubmissions(next);
   return { ok: true, message: "Submission received. Judges can now review your project.", submission };

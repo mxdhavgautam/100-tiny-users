@@ -1,5 +1,4 @@
 import { readSubmissions } from "@/src/lib/storage";
-import { BUG_LONG_TEXT_LAYOUT, BUG_SCREEN_READER_SUBMIT } from "@/src/demo/bugSwitches";
 import { PortalClient } from "@/src/components/PortalClient";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +17,7 @@ export default async function PortalPage() {
           Dashboard
         </a>
       </div>
-      <PortalClient
-        initialSubmissions={submissions}
-        screenReaderSubmitBug={BUG_SCREEN_READER_SUBMIT}
-        longTextLayoutBug={BUG_LONG_TEXT_LAYOUT}
-      />
+      <PortalClient initialSubmissions={submissions} />
     </main>
   );
 }

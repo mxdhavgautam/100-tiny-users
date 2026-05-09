@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "id": "demo-hackathon",
+  "name": "Local Hackathon Submission Portal",
+  "environment": "local",
+  "baseUrl": "http://127.0.0.1:3000",
+  "allowedOrigins": ["http://127.0.0.1:3000"],
+  "auth": {
+    "kind": "none"
+  },
+  "reset": {
+    "kind": "http",
+    "url": "http://127.0.0.1:3000/api/submissions/reset",
+    "method": "POST",
+    "dryRun": false
+  },
+  "workflows": [
+    {
+      "id": "submit-project",
+      "name": "Submit a project",
+      "description": "A founder submits a hackathon project for judging through the public portal.",
+      "route": "/portal",
+      "successCriteria": [
+        "The submission form accepts valid required fields.",
+        "The user receives a visible confirmation after submission.",
+        "Duplicate team names are rejected instead of silently overwriting data."
+      ],
+      "failureCriteria": [
+        "Required fields cannot be completed with semantic controls.",
+        "Long project ideas break layout or prevent submission.",
+        "Submitted script content executes in the page."
+      ],
+      "steps": [
+        {
+          "id": "open-portal",
+          "action": "goto",
+          "route": "/portal"
+        },
+        {
+          "id": "fill-team-name",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Team name" },
+          "valueKey": "teamName"
+        },
+        {
+          "id": "fill-contact-email",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Contact email" },
+          "valueKey": "contactEmail"
+        },
+        {
+          "id": "fill-project-title",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Project title" },
+          "valueKey": "projectTitle"
+        },
+        {
+          "id": "fill-primary-language",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Primary language" },
+          "valueKey": "primaryLanguage"
+        },
+        {
+          "id": "fill-project-idea",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Project idea" },
+          "valueKey": "projectIdea"
+        },
+        {
+          "id": "submit",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Submit project" },
+          "fallbackLocator": { "kind": "testId", "value": "submit-project" }
+        },
+        {
+          "id": "confirm",
+          "action": "expectText",
+          "text": "Submission received"
+        }
+      ]
+    }
+  ],
+  "secrets": [],
+  "artifactPolicy": {
+    "screenshots": true,
+    "traces": true,
+    "consoleLogs": true,
+    "networkLogs": true,
+    "retentionDays": 7
+  },
+  "runProfile": {
+    "defaultCount": 50,
+    "browser": "chromium",
+    "deviceProfiles": ["desktop", "mobile"],
+    "maxDurationMs": 600000
+  },
+  "externalExecution": {
+    "webhookPath": "/api/harness-execute"
+  }
+}

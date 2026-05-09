@@ -6,5 +6,6 @@ dist
 artifacts/runs
 artifacts/latest-report.json
 artifacts/demo-session.json
+artifacts/prototype.sqlite
 data/submissions.json
 *.tsbuildinfo

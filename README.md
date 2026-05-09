@@ -10,7 +10,7 @@ Synthetic browser users attack a tiny hackathon submission portal, cluster failu
 bun install
 bun run dev
 bun run reset
-bun run eval -- --count 50
+bun run eval -- --config configs/demo-hackathon.json --count 50
 bun run demo:full
 bun run report
 ```
@@ -20,7 +20,13 @@ bun run report
 Replay one persona:
 
 ```bash
-bun run eval -- --persona U002 --label replay-U002 --no-reset
+bun run eval -- --config configs/demo-hackathon.json --persona U002 --label replay-U002 --no-reset
+```
+
+Generate Codex and Cursor repair packets without executing an agent:
+
+```bash
+bun run patch:prompt
 ```
 
 If Playwright needs a browser:
@@ -36,4 +42,4 @@ Open locally:
 - Dashboard: http://127.0.0.1:3000
 - Portal: http://127.0.0.1:3000/portal
 
-Artifacts are written under `artifacts/runs/<runId>/`.
+Run metadata is stored in `artifacts/prototype.sqlite`. Artifacts are written under `artifacts/runs/<runId>/`.

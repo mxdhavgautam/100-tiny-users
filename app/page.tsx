@@ -1,10 +1,10 @@
 import { DashboardClient } from "@/src/components/DashboardClient";
-import { readDemoSession, readLatestPrompt, readLatestReport } from "@/src/lib/reportReader";
+import { readDashboardSnapshot } from "@/src/lib/dashboardSurface";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [session, latest, prompt] = await Promise.all([readDemoSession(), readLatestReport(), readLatestPrompt()]);
+  const snapshot = await readDashboardSnapshot();
 
-  return <DashboardClient initialSession={session} initialReport={latest} initialPrompt={prompt ?? ""} />;
+  return <DashboardClient {...snapshot} />;
 }

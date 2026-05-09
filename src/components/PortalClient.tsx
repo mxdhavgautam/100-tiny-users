@@ -6,8 +6,6 @@ import type { Submission, SubmissionResponse } from "@/src/lib/types";
 
 type Props = {
   initialSubmissions: Submission[];
-  screenReaderSubmitBug: boolean;
-  longTextLayoutBug: boolean;
 };
 
 type FormState = {
@@ -26,7 +24,7 @@ const emptyForm: FormState = {
   projectIdea: ""
 };
 
-export function PortalClient({ initialSubmissions, screenReaderSubmitBug, longTextLayoutBug }: Props) {
+export function PortalClient({ initialSubmissions }: Props) {
   const [hydrated, setHydrated] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions.slice(0, 20));
@@ -116,8 +114,8 @@ export function PortalClient({ initialSubmissions, screenReaderSubmitBug, longTe
             required
           />
         </label>
-        <button data-testid="submit-project" disabled={pending} aria-label={screenReaderSubmitBug ? undefined : "Submit project"}>
-          {screenReaderSubmitBug ? <span aria-hidden="true">🚀</span> : "Submit project"}
+        <button data-testid="submit-project" disabled={pending}>
+          Submit project
         </button>
         <div data-testid="submission-status" className={clsx("status", isError && "error")} aria-live="polite">
           {status}
@@ -133,7 +131,7 @@ export function PortalClient({ initialSubmissions, screenReaderSubmitBug, longTe
               <p className="muted">
                 {submission.primaryLanguage} · {submission.projectTitle}
               </p>
-              <p className={clsx("ideaText", longTextLayoutBug ? "buggy" : "fixed")}>{submission.projectIdea}</p>
+              <p className={clsx("ideaText", "fixed")}>{submission.projectIdea}</p>
             </article>
           ))}
         </div>

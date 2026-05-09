@@ -21,7 +21,7 @@ The codebase is a local Next.js demo with these components:
 - Persona generator: `eval/personas.ts` cycles through ten fixed archetypes with deterministic properties.
 - Browser runner: `eval/runner.ts` launches Chromium, fills the portal through Playwright, applies fixed assertions, records observations, screenshots, and known failure kinds.
 - Clustering/reporting: `eval/cluster.ts` groups failures by `FailureKind`; `eval/reporting.ts` writes `report.json`, `summary.md`, latest-report JSON, and per-cluster markdown.
-- Demo patch loop: `eval/patcher.ts` writes `codex-patch-prompt.md` and, in demo mode, flips known bug switches instead of invoking a real repair harness.
+- Demo patch loop: `eval/patcher.ts` writes Codex/Cursor repair packets under each run's `repair/` directory and, in demo mode, flips known bug switches after packet generation.
 - Dashboard: `src/components/DashboardClient.tsx` reads latest local artifacts and displays before/after progress.
 
 This is a solid proof-of-concept because it demonstrates the end-to-end loop. It is not yet a product because target configuration, user modeling, harness execution, failure taxonomy, evidence capture, repair prompting, security isolation, persistence, multi-tenant operation, and integrations are all demo-scoped.

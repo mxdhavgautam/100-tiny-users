@@ -14,7 +14,24 @@ export type AssistiveTech = "none" | "screen-reader" | "keyboard-only";
 export type NetworkProfile = "normal" | "slow-3g" | "flaky";
 export type TextVolume = "normal" | "large" | "massive";
 export type FailureSeverity = "low" | "medium" | "high" | "critical";
-export type PersonaStatus = "passed" | "failed";
+export type FailureConfidence = "certain-bug" | "likely-bug" | "flaky-signal" | "environment-issue" | "blocked-setup" | "harness-limitation";
+export type FailureCategory = "product-bug" | "test-bug" | "flaky-environment" | "auth-setup" | "harness-limitation" | "blocked-policy";
+export type PersonaStatus = "passed" | "failed" | "blocked" | "errored";
+export type ArtifactKind =
+  | "trace"
+  | "screenshot"
+  | "console"
+  | "network"
+  | "config"
+  | "prompt"
+  | "repair"
+  | "report"
+  | "accessibility"
+  | "dom"
+  | "cohort"
+  | "diff"
+  | "validation"
+  | "log";
 
 export type FailureKind =
   | "duplicate-team-overwrite"
@@ -41,25 +58,53 @@ export type Persona = {
   expectsDuplicateBlocked: boolean;
 };
 
+export type ArtifactRef = {
+  kind: ArtifactKind;
+  path: string;
+  description: string;
+};
+
+export type OracleFinding = {
+  id: string;
+  title: string;
+  expected: string;
+  actual: string;
+  impact: string;
+  confidence: FailureConfidence;
+  category: FailureCategory;
+  evidence: string[];
+};
+
 export type Failure = {
   kind: FailureKind;
   title: string;
   severity: FailureSeverity;
+  oracleId: string;
   expected: string;
   actual: string;
+  impact: string;
+  confidence: FailureConfidence;
+  category: FailureCategory;
   selector?: string;
+  workflowId?: string;
+  stepId?: string;
   screenshotPath?: string;
   replayCommand?: string;
+  artifactRefs?: ArtifactRef[];
 };
 
 export type PersonaResult = {
   runId: string;
+  workflowId: string;
+  harnessKind: "deterministic-playwright" | "semantic-mini-user" | "external-webhook";
   persona: Persona;
   status: PersonaStatus;
   startedAt: string;
   finishedAt: string;
   durationMs: number;
   observations: string[];
+  artifactRefs: ArtifactRef[];
+  findings: OracleFinding[];
   failure?: Failure;
 };
 
@@ -67,11 +112,14 @@ export type EvalSummary = {
   runId: string;
   label: string;
   url: string;
+  artifactRefs?: ArtifactRef[];
   startedAt: string;
   finishedAt: string;
   total: number;
   passed: number;
   failed: number;
+  blocked: number;
+  errored: number;
   scorePercent: number;
   clusters: FailureCluster[];
 };
@@ -80,6 +128,10 @@ export type FailureCluster = {
   kind: FailureKind;
   title: string;
   severity: FailureSeverity;
+  oracleId: string;
+  confidence: FailureConfidence;
+  category: FailureCategory;
+  fingerprint: string;
   count: number;
   personaIds: string[];
   replayCommands: string[];
@@ -89,6 +141,12 @@ export type FailureCluster = {
 export type EvalReport = {
   summary: EvalSummary;
   results: PersonaResult[];
+  config?: import("@/src/lib/config").TargetConfig;
+  harnessPreviews?: {
+    kind: "deterministic-playwright" | "semantic-mini-user" | "external-webhook";
+    status: "available" | "dry-run" | "disabled";
+    summary: string;
+  }[];
 };
 
 export type SubmissionInput = {
@@ -123,6 +181,8 @@ export type RunProgress = {
   completed: number;
   passed: number;
   failed: number;
+  blocked: number;
+  errored: number;
   scorePercent: number;
   updatedAt: string;
 };

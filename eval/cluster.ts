@@ -14,13 +14,21 @@ export function clusterFailures(results: PersonaResult[]): FailureCluster[] {
     if (!result.failure) {
       continue;
     }
-    const existing = clusters.get(result.failure.kind) ?? [];
+    const fingerprint = [
+      result.failure.kind,
+      result.failure.oracleId,
+      result.failure.workflowId ?? result.workflowId,
+      result.failure.stepId ?? "",
+      result.failure.selector ?? "",
+      result.failure.actual.replace(/\s+/g, " ").slice(0, 120)
+    ].join("|");
+    const existing = clusters.get(fingerprint) ?? [];
     existing.push(result);
-    clusters.set(result.failure.kind, existing);
+    clusters.set(fingerprint, existing);
   }
 
-  return [...clusters.values()]
-    .map((items) => {
+  return [...clusters.entries()]
+    .map(([fingerprint, items]) => {
       const first = items[0];
       if (!first.failure) {
         throw new Error("Clustered result is missing failure.");
@@ -29,6 +37,10 @@ export function clusterFailures(results: PersonaResult[]): FailureCluster[] {
         kind: first.failure.kind,
         title: first.failure.title,
         severity: first.failure.severity,
+        oracleId: first.failure.oracleId,
+        confidence: first.failure.confidence,
+        category: first.failure.category,
+        fingerprint,
         count: items.length,
         personaIds: items.map((item) => item.persona.id),
         replayCommands: items.map((item) => item.failure?.replayCommand ?? "").filter((command) => command.length > 0),

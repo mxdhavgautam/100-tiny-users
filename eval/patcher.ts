@@ -1,62 +1,36 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { parsePatcherArgs } from "./args";
+import { parseRepairArgs } from "./repair/cli";
+import { commandString, orchestrateRepair } from "./repair/orchestrator";
 import { BUG_SWITCHES_PATH, DEMO_SESSION_PATH, LATEST_REPORT_PATH, RUNS_DIR } from "../src/lib/paths";
 import type { DemoSession, EvalReport, FailureCluster, PatchLogEntry } from "../src/lib/types";
+import type { RepairRunResult } from "./repair/types";
 
 async function readReport(): Promise<EvalReport> {
   const raw = await fs.readFile(LATEST_REPORT_PATH, "utf8");
   return JSON.parse(raw) as EvalReport;
 }
 
-function promptFor(report: EvalReport): string {
-  return `# Codex Patch Prompt
+export async function repair(argv: string[] = process.argv.slice(2)): Promise<RepairRunResult> {
+  const args = parseRepairArgs(argv);
+  const report = await readReport();
+  const runDir = path.join(RUNS_DIR, report.summary.runId);
+  await fs.mkdir(runDir, { recursive: true });
+  const result = await orchestrateRepair(report, runDir, args);
+  const resultPath = path.join(runDir, "repair", "repair-result.json");
+  await fs.writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
 
-Patch the root cause of the top Hundred Tiny Users failure clusters in artifacts/latest-report.json.
+  for (const packet of result.packets) {
+    console.log(`Wrote ${packet.harness} repair prompt: ${packet.path}`);
+  }
+  console.log(`Wrote repair result: ${resultPath}`);
+  for (const command of result.commands) {
+    console.log(`${command.harness} setup: ${commandString(command.setupCommand)}`);
+    console.log(`${command.harness} repair: ${commandString(command.repairCommand)}`);
+  }
 
-## Goal
-
-Improve the browser-only colony score for the product promise: "A hackathon project submission portal".
-
-## Hard constraints
-
-- Do not use any.
-- Do not weaken evals or persona expectations.
-- Do not bypass the browser eval by changing eval/runner.ts or eval/personas.ts unless the failure is demonstrably in the eval itself. The default assumption is that app code is broken.
-- Make the smallest production-safe app-code fix.
-
-## Current summary
-
-\`\`\`json
-${JSON.stringify(report.summary, null, 2)}
-\`\`\`
-
-## Top clusters
-
-\`\`\`json
-${JSON.stringify(report.summary.clusters, null, 2)}
-\`\`\`
-
-## Files worth inspecting
-
-- src/components/PortalClient.tsx
-- src/demo/bugSwitches.ts
-- src/lib/storage.ts
-- app/api/submissions/route.ts
-- app/portal/page.tsx
-
-## Validation commands
-
-\`\`\`bash
-bun run typecheck
-bun run build
-bun run eval -- --label patched --count 50
-\`\`\`
-
-## Required response
-
-Summarize files changed, why the root cause is fixed, validation results, and before/after score.
-`;
+  return result;
 }
 
 function hasCluster(clusters: FailureCluster[], kind: FailureCluster["kind"]): boolean {
@@ -90,12 +64,15 @@ async function flipSwitches(report: EvalReport): Promise<PatchLogEntry[]> {
 }
 
 export async function patch(argv: string[] = process.argv.slice(2)): Promise<PatchLogEntry[]> {
+  const repairOnly = argv.includes("--execute") || argv.includes("--harness") || argv.includes("--agent") || argv.includes("--dry-run");
+  if (repairOnly) {
+    await repair(argv);
+    return [];
+  }
+
   const args = parsePatcherArgs(argv);
   const report = await readReport();
-  const runDir = path.join(RUNS_DIR, report.summary.runId);
-  await fs.mkdir(runDir, { recursive: true });
-  await fs.writeFile(path.join(runDir, "codex-patch-prompt.md"), promptFor(report), "utf8");
-  console.log(`Wrote ${path.join(runDir, "codex-patch-prompt.md")}`);
+  await repair(["--dry-run", "--harness", "all"]);
 
   if (args.mode === "prompt") {
     return [];

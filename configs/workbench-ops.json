@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "id": "workbench-ops",
+  "name": "Customer Operations Workbench",
+  "environment": "local",
+  "baseUrl": "http://127.0.0.1:3000",
+  "allowedOrigins": ["http://127.0.0.1:3000"],
+  "auth": {
+    "kind": "none"
+  },
+  "reset": {
+    "kind": "http",
+    "url": "http://127.0.0.1:3000/api/workbench/reset",
+    "method": "POST",
+    "dryRun": false
+  },
+  "workflows": [
+    {
+      "id": "claim-shipping-escalation",
+      "name": "Claim a critical shipping escalation",
+      "description": "An ops user claims the top critical shipping case and moves it into in-review work.",
+      "route": "/workbench",
+      "successCriteria": [
+        "A visible critical case can be selected from the queue.",
+        "Ownership can be assigned through the UI.",
+        "The queue state change is confirmed with a visible success notice."
+      ],
+      "failureCriteria": [
+        "Queue cards cannot be found by accessible button names.",
+        "Owner or queue state controls cannot be operated semantically.",
+        "Saving the queue state does not show the expected confirmation."
+      ],
+      "steps": [
+        { "id": "open-workbench", "action": "goto", "route": "/workbench" },
+        {
+          "id": "open-critical-case",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Onboarding laptop replacement has not left the warehouse" }
+        },
+        {
+          "id": "set-owner",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Owner" },
+          "valueKey": "ownerName"
+        },
+        {
+          "id": "set-queue-state",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Queue state" },
+          "valueKey": "queueState"
+        },
+        {
+          "id": "save-queue-state",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Save queue settings" }
+        },
+        {
+          "id": "confirm-queue-save",
+          "action": "expectText",
+          "text": "Case ownership and queue state updated."
+        }
+      ]
+    },
+    {
+      "id": "search-billing-by-duplicate-charge",
+      "name": "Find the billing case by duplicate-charge language",
+      "description": "An ops user searches with customer language and should still find the billing anomaly case.",
+      "route": "/workbench",
+      "successCriteria": [
+        "Search can find a case by realistic billing language, not only exact title terms.",
+        "The billing case opens after the search result is selected."
+      ],
+      "failureCriteria": [
+        "Search misses the billing case when the query matches only summary-style customer language.",
+        "The matching case cannot be selected from the filtered queue."
+      ],
+      "steps": [
+        { "id": "open-workbench", "action": "goto", "route": "/workbench" },
+        {
+          "id": "search-duplicate-charge",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Search cases" },
+          "valueKey": "queueSearch"
+        },
+        {
+          "id": "open-billing-case",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Annual plan charged twice after seat expansion" }
+        },
+        {
+          "id": "billing-case-visible",
+          "action": "expectVisible",
+          "locator": { "kind": "role", "role": "heading", "name": "Annual plan charged twice after seat expansion" }
+        }
+      ]
+    },
+    {
+      "id": "request-admin-identity-confirmation",
+      "name": "Request admin identity confirmation after SSO migration",
+      "description": "An ops user should be able to request the specific admin identity detail needed for the access-recovery case.",
+      "route": "/workbench",
+      "successCriteria": [
+        "The access-lockout case can be opened from the queue.",
+        "The confirmation flow offers an admin-identity-specific detail choice.",
+        "Applying the confirmation request shows a visible success notice."
+      ],
+      "failureCriteria": [
+        "The confirmation flow only exposes unrelated generic detail choices.",
+        "The specific admin-identity confirmation cannot be requested through the UI."
+      ],
+      "steps": [
+        { "id": "open-workbench", "action": "goto", "route": "/workbench" },
+        {
+          "id": "open-access-case",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Workspace admin locked out after SSO domain migration" }
+        },
+        {
+          "id": "set-confirmation-resolution",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Resolution action" },
+          "valueKey": "resolutionAction"
+        },
+        {
+          "id": "set-requested-detail",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Requested detail" },
+          "valueKey": "requestedField"
+        },
+        {
+          "id": "set-customer-summary",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Customer-facing summary" },
+          "valueKey": "customerMessage"
+        },
+        {
+          "id": "apply-confirmation-request",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Request customer confirmation" }
+        },
+        {
+          "id": "confirm-confirmation-request",
+          "action": "expectText",
+          "text": "Request customer confirmation applied."
+        }
+      ]
+    },
+    {
+      "id": "issue-credit-with-followup",
+      "name": "Issue a billing credit while keeping the follow-up case open",
+      "description": "An ops user applies a billing credit but the case should remain in review until finance follow-up is complete.",
+      "route": "/workbench",
+      "successCriteria": [
+        "The billing case resolution flow accepts a credit amount and summary.",
+        "Applying the credit shows a visible success notice.",
+        "The case remains in review instead of being closed immediately."
+      ],
+      "failureCriteria": [
+        "The billing credit action resolves the case immediately even though follow-up is still pending."
+      ],
+      "steps": [
+        { "id": "open-workbench", "action": "goto", "route": "/workbench" },
+        {
+          "id": "open-billing-case",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Annual plan charged twice after seat expansion" }
+        },
+        {
+          "id": "set-credit-resolution",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Resolution action" },
+          "valueKey": "resolutionAction"
+        },
+        {
+          "id": "set-credit-amount",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Credit amount" },
+          "valueKey": "creditAmount"
+        },
+        {
+          "id": "set-customer-summary",
+          "action": "fill",
+          "locator": { "kind": "label", "text": "Customer-facing summary" },
+          "valueKey": "customerMessage"
+        },
+        {
+          "id": "apply-credit",
+          "action": "click",
+          "locator": { "kind": "role", "role": "button", "name": "Issue service credit" }
+        },
+        {
+          "id": "confirm-credit-notice",
+          "action": "expectText",
+          "text": "Issue service credit applied."
+        },
+        {
+          "id": "status-stays-in-review",
+          "action": "expectText",
+          "locator": { "kind": "testId", "value": "case-status-badge" },
+          "text": "in review"
+        }
+      ]
+    }
+  ],
+  "secrets": [],
+  "artifactPolicy": {
+    "screenshots": true,
+    "traces": true,
+    "consoleLogs": true,
+    "networkLogs": true,
+    "retentionDays": 7
+  },
+  "runProfile": {
+    "defaultCount": 20,
+    "browser": "chromium",
+    "deviceProfiles": ["desktop", "mobile"],
+    "maxDurationMs": 600000
+  },
+  "externalExecution": {
+    "webhookPath": "/api/harness-execute"
+  }
+}

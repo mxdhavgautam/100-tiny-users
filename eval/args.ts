@@ -1,8 +1,14 @@
+import type { UserExecutionKind } from "@/src/harnesses/types";
+
 export type RunnerArgs = {
   url: string;
   count: number;
   label: string;
+  configPath?: string;
   personaId?: string;
+  cohortPath?: string;
+  workflowId?: string;
+  harness: UserExecutionKind;
   noReset: boolean;
 };
 
@@ -16,6 +22,7 @@ export function parseRunnerArgs(argv: string[]): RunnerArgs {
     url: "http://127.0.0.1:3000/portal",
     count: 50,
     label: "manual",
+    harness: "deterministic-playwright",
     noReset: false
   };
 
@@ -31,8 +38,24 @@ export function parseRunnerArgs(argv: string[]): RunnerArgs {
     } else if (token === "--label" && next) {
       args.label = next;
       index += 1;
+    } else if (token === "--config" && next) {
+      args.configPath = next;
+      index += 1;
     } else if (token === "--persona" && next) {
       args.personaId = next;
+      index += 1;
+    } else if (token === "--cohort" && next) {
+      args.cohortPath = next;
+      index += 1;
+    } else if (token === "--workflow" && next) {
+      args.workflowId = next;
+      index += 1;
+    } else if (
+      token === "--harness" &&
+      next &&
+      (next === "deterministic-playwright" || next === "semantic-mini-user" || next === "external-webhook")
+    ) {
+      args.harness = next;
       index += 1;
     } else if (token === "--no-reset") {
       args.noReset = true;

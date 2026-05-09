@@ -8,13 +8,14 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "typecheck": "tsc --noEmit",
-    "reset": "tsx eval/reset-demo.ts",
-    "eval": "tsx eval/runner.ts",
-    "demo:full": "tsx eval/demo-full.ts --keep-alive",
-    "demo:full:once": "tsx eval/demo-full.ts",
-    "patch:demo": "tsx eval/patcher.ts --mode demo --all",
-    "patch:prompt": "tsx eval/patcher.ts --mode prompt --all",
-    "report": "tsx eval/print-latest-report.ts"
+    "reset": "bun eval/reset-demo.ts",
+    "eval": "bun eval/runner.ts",
+    "demo:full": "bun eval/demo-full.ts --keep-alive",
+    "demo:full:once": "bun eval/demo-full.ts",
+    "patch:demo": "bun eval/patcher.ts --mode demo --all",
+    "patch:prompt": "bun eval/patcher.ts --mode prompt --all",
+    "repair": "bun eval/patcher.ts",
+    "report": "bun eval/print-latest-report.ts"
   },
   "dependencies": {
     "@playwright/test": "^1.55.1",
@@ -25,6 +26,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.13",
     "@types/node": "^22.15.3",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
