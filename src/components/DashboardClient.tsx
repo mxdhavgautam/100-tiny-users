@@ -14,6 +14,12 @@ import type { DemoSession, EvalReport, FailureCluster } from "@/src/lib/types";
 
 type Props = DashboardSnapshot;
 
+type RunLaunchState = {
+  busy: boolean;
+  message: string;
+  tone: "success" | "error" | "idle";
+};
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -307,6 +313,8 @@ export function DashboardClient({
   const [prompt, setPrompt] = useState(initialPrompt);
   const [promptOpen, setPromptOpen] = useState(false);
   const [copyLabel, setCopyLabel] = useState("Copy prompt");
+  const [targetUrl, setTargetUrl] = useState(latestConfig?.baseUrl ? new URL("/portal", latestConfig.baseUrl).toString() : "http://127.0.0.1:3000/portal");
+  const [launchState, setLaunchState] = useState<RunLaunchState>({ busy: false, message: "", tone: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -403,6 +411,30 @@ export function DashboardClient({
     window.setTimeout(() => setCopyLabel("Copy prompt"), 1200);
   }
 
+  async function launchRun(mode: "suite" | "url") {
+    setLaunchState({ busy: true, message: "Starting run...", tone: "idle" });
+
+    try {
+      const response = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(mode === "suite" ? { mode } : { mode, targetUrl })
+      });
+      const payload: unknown = await response.json();
+      const message = isObject(payload) && typeof payload.message === "string" ? payload.message : "Run launcher responded.";
+      if (!response.ok) {
+        throw new Error(message);
+      }
+      setLaunchState({ busy: false, message, tone: "success" });
+    } catch (error: unknown) {
+      setLaunchState({
+        busy: false,
+        message: error instanceof Error ? error.message : "Unable to start run.",
+        tone: "error"
+      });
+    }
+  }
+
   return (
     <main className="shell" style={{ display: "grid", gap: 20 }}>
       <nav className="topbar">
@@ -465,6 +497,46 @@ export function DashboardClient({
           </div>
         </div>
 
+        <div style={{ display: "grid", gap: 18 }}>
+          <div className="panel" style={{ display: "grid", gap: 16 }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Run launcher</h2>
+              <p className="muted" style={{ margin: "8px 0 0" }}>
+                Start the bundled suite, or replay the current portal workflow against a compatible URL.
+              </p>
+            </div>
+            <label style={{ display: "grid", gap: 8 }}>
+              <span className="metricLabel">Target URL</span>
+              <input
+                value={targetUrl}
+                onChange={(event) => setTargetUrl(event.target.value)}
+                placeholder="https://example.com/portal"
+                inputMode="url"
+              />
+            </label>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button className="button" type="button" onClick={() => void launchRun("suite")} disabled={launchState.busy}>
+                {launchState.busy ? "Starting..." : "Run bundled suite"}
+              </button>
+              <button className="button secondary" type="button" onClick={() => void launchRun("url")} disabled={launchState.busy}>
+                Run URL replay
+              </button>
+            </div>
+            {launchState.message ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="card"
+                style={{
+                  borderColor: launchState.tone === "error" ? "rgba(255, 107, 107, 0.45)" : "rgba(123, 255, 177, 0.35)",
+                  color: launchState.tone === "error" ? "var(--red)" : "inherit"
+                }}
+              >
+                {launchState.message}
+              </div>
+            ) : null}
+          </div>
+
         <div className="panel" style={{ display: "grid", gap: 16 }}>
           <div>
             <h2 style={{ margin: 0 }}>Current config</h2>
@@ -499,6 +571,7 @@ export function DashboardClient({
               </code>
             </div>
           ) : null}
+        </div>
         </div>
       </section>
 

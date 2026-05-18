@@ -2,6 +2,7 @@ import type { UserExecutionKind } from "@/src/harnesses/types";
 
 export type RunnerArgs = {
   url: string;
+  urlProvided: boolean;
   count: number;
   label: string;
   configPath?: string;
@@ -20,6 +21,7 @@ export type PatcherArgs = {
 export function parseRunnerArgs(argv: string[]): RunnerArgs {
   const args: RunnerArgs = {
     url: "http://127.0.0.1:3000/portal",
+    urlProvided: false,
     count: 50,
     label: "manual",
     harness: "deterministic-playwright",
@@ -31,6 +33,7 @@ export function parseRunnerArgs(argv: string[]): RunnerArgs {
     const next = argv[index + 1];
     if (token === "--url" && next) {
       args.url = next;
+      args.urlProvided = true;
       index += 1;
     } else if (token === "--count" && next) {
       args.count = Number.parseInt(next, 10);

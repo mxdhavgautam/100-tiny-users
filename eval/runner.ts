@@ -62,17 +62,23 @@ async function readCohortPersonaIds(cohortPath: string): Promise<string[]> {
 }
 
 function configFromUrl(config: TargetConfig, url: string): TargetConfig {
-  const origin = new URL(url).origin;
+  const targetUrl = new URL(url);
+  const origin = targetUrl.origin;
+  const route = `${targetUrl.pathname}${targetUrl.search}`;
   const nextConfig: TargetConfig = {
     ...config,
+    id: `${config.id}-url`,
+    name: `${config.name} URL replay`,
     baseUrl: origin,
     allowedOrigins: [origin],
-    reset: {
-      kind: "http",
-      url: new URL("/api/submissions/reset", origin).toString(),
-      method: "POST",
-      dryRun: false
-    }
+    reset: { kind: "disabled" },
+    workflows: config.workflows.map((workflow, index) => index === 0
+      ? {
+          ...workflow,
+          route,
+          steps: workflow.steps.map((step) => step.action === "goto" ? { ...step, route } : step)
+        }
+      : workflow)
   };
   return nextConfig;
 }
@@ -161,7 +167,7 @@ export async function runColony(argv: string[] = process.argv.slice(2), options:
   const currentRunId = runId(args.label);
   const dirs = await prepareRunArtifacts(currentRunId);
   const baseConfig = args.configPath ? await loadTargetConfig(args.configPath) : await loadDemoHackathonConfig();
-  const config = args.configPath || args.url === "http://127.0.0.1:3000/portal" ? baseConfig : configFromUrl(baseConfig, args.url);
+  const config = args.configPath || !args.urlProvided ? baseConfig : configFromUrl(baseConfig, args.url);
   const workflow = args.workflowId
     ? config.workflows.find((candidate) => candidate.id === args.workflowId)
     : config.workflows[0];
