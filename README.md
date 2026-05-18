@@ -1,3 +1,5 @@
+![100 Tiny Users preview](assets/readme/100-tiny-users-preview.png)
+
 # Hundred Tiny Users
 
 Hundred Tiny Users is a local evaluation lab for testing product flows with synthetic users instead of hand-written test cases.
